@@ -1,0 +1,14 @@
+Manifest-Version: 1.0
+Implementation-Title: LIUM_SpkDiarization
+Implementation-Version: 3.9 03/16/2010 09:08 PM
+Specification-Vendor-URL: http://www-lium.univ-lemans.fr/
+Built-By: ${app.vendor}
+Created-By: 14.3-b01-101 (Apple Inc.)
+Specification-Vendor-Name: LIUM
+Ant-Version: Apache Ant 1.7.1
+Implementation-Vendor: ${app.vendor}
+Specification-Vendor-Mail: spkDiarization@lium.univ-lemans.fr
+Specification-Title: LIUM_SpkDiarization
+Specification-Version: 3.9
+Main-Class: fr.lium.spkDiarization.system.Diarization
+
