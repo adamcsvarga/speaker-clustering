@@ -1,0 +1,6 @@
+# use glob syntax.
+syntax: glob
+*.swp
+*.swo
+*.pyc
+run_parallel.sh
