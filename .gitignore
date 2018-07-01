@@ -4,3 +4,6 @@ syntax: glob
 *.swo
 *.pyc
 run_parallel.sh
+data
+test
+wav
