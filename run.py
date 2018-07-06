@@ -22,8 +22,9 @@ import os
 
 from nltools import misc
 
-stage = 5
+stage = 0
 nj=12
+stride = 10
 
 total = 0;
 for fn in os.listdir('wav'):
@@ -90,6 +91,8 @@ if stage <= 1:
             if not os.path.exists('%s/%s.c/gmm' % (datadir, fn)):
 
                 cnt += 1
+                if cnt % stride != 0:
+                    continue
                 if (cnt % nj) == 0:
                     scriptf.write('wait\n')
 
@@ -285,8 +288,6 @@ if stage <= 5:
     # 		print "$t[0] $t[1] $t[2] $t[3] $t[4] $t[5] $t[6] ".$d{$n}."\n";
     # 	}'> sample/samples.seg
 
-    stride = 10
-
     with open ('sample/samples.seg', 'w') as samplesf:
 
         i = 0
@@ -304,8 +305,6 @@ if stage <= 5:
                 fname = '%s/%s' % (dirn, fn)
 
                 cnt += 1
-                if cnt % stride != 0:
-                    continue
                 print fname
 
                 with open(fname, 'r') as inf:
@@ -338,7 +337,7 @@ if stage <= 6:
     # --cMethod=ce --cThr=1.7 --tInputMask="src/ubm.gmm" \
     # --emCtrl=1,5,0.01 --sTop=5,"src/ubm.gmm" cross
 
-    cmd = ('java -Xmx24G -classpath '
+    cmd = ('java -Xmx48G -classpath '
            'src/LIUM_SpkDiarization-8.4.1.jar fr.lium.spkDiarization.programs.MClust '
            '--fInputMask=sample/%s.wav --fInputDesc="audio2sphinx,1:3:2:0:0:0,13,1:1:300:4" '
            '--sInputMask=sample/samples.seg --sOutputMask=sample/%s.seg '
@@ -348,68 +347,141 @@ if stage <= 6:
     print cmd
     os.system(cmd)
 
-sys.exit(0)
+#################################################################
+# Re-write global cluster labels to original segmentation       #
+#################################################################
 
-# 
-# # Re-write global cluster labels to original segmentation       #
-# #################################################################
-# rm -f data/*/*.final.seg
-# python assign_clusters.py sample/cross.seg
-# 
-# #################################################################
-# 
-# ################################################################
-# # Train speaker model with MAP                                 #
-# ################################################################
-# # wavok és globális szegmentálások összefűzése
-# rm -f wav/speaker.wav
-# rm -f data/speaker.seg
-# for f in wav/*.wav; do
-#  fname=`echo $f | rev | cut -f2- -d'.' | cut -f1 -d'/' | rev`
-#  python concat_seg.py data/${fname}/${fname}
-#  if [ -f wav/speaker.wav ]; then
-#   sox wav/speaker.wav $f wav/tmp.wav
-#   mv wav/tmp.wav wav/speaker.wav
-#  else
-#   sox $f wav/speaker.wav
-#  fi
-# done
-# 
-# # copy the UBM for each speaker
-# java -Xmx2024m -cp src/LIUM_SpkDiarization-8.4.1.jar fr.lium.spkDiarization.programs.MTrainInit --help --sInputMask=data/%s.seg --fInputMask=wav/%s.wav --fInputDesc="audio2sphinx,1:3:2:0:0:0,13,1:1:300:4"  --emInitMethod=copy --tInputMask=src/ubm.gmm --tOutputMask=data/%s.init.gmm speaker
-# 
-# # train (MAP adaptation, mean only) of each speaker, the diarization file describes the training data of each speaker.
-# java -Xmx2024m -cp src/LIUM_SpkDiarization-8.4.1.jar fr.lium.spkDiarization.programs.MTrainMAP --help --sInputMask=data/%s.seg --fInputMask=wav/%s.wav --fInputDesc="audio2sphinx,1:3:2:0:0:0,13,1:1:300:4"  --tInputMask=data/%s.init.gmm --emCtrl=1,5,0.01 --varCtrl=0.01,10.0 --tOutputMask=data/%s.gmm speaker
-# 
-# #############################################################
-# # Speaker recognition                                       #
-# #############################################################
-# 
-# mkdir -p test_data
-# # init
-# echo "#!/bin/bash" >> run_parallel.sh # control parallelization
-# # speeding up by running processes parallelly
-# c=0
-# for f in test/*.wav; do
-#   ((c++))
-#   if [ $c -gt $nj ]; then
-#     c=0
-#     echo "wait" >> run_parallel.sh
-#     echo "./cluster_init_test.sh ./$f &" >> run_parallel.sh
-#   else
-#     echo "./cluster_init_test.sh ./$f &" >> run_parallel.sh
-#   fi
-# done
-# echo "wait" >> run_parallel.sh
-# echo "exit 0" >> run_parallel.sh
-# 
-# # parallel initialization
-# chmod +x run_parallel.sh
-# ./run_parallel.sh
-# rm run_parallel.sh
-# 
-# for f in test/*.wav; do
-#  testShow=`echo $f | rev | cut -f2- -d'.' | cut -f1 -d'/' | rev`
-#  java -Xmx2G -Xms2G -cp src/LIUM_SpkDiarization-8.4.1.jar  fr.lium.spkDiarization.programs.Identification --sInputMask=test_data/${testShow}/%s.i.seg --help --fInputMask=test/%s.wav  --sOutputMask=test_data/${testShow}/%s.ident.seg --fInputDesc="audio2sphinx,1:3:2:0:0:0,13,1:1:300:4" --tInputMask=data/speaker.gmm --sTop=5,src/ubm.gmm  --sSetLabel=add $testShow
-# done
+if stage <= 7:
+    # rm -f data/*/*.final.seg
+    # python assign_clusters.py sample/cross.seg
+    os.system('rm -f data/*/*.final.seg')
+    os.system('python assign_clusters.py sample/cross.seg')
+
+################################################################
+# Train speaker model with MAP                                 #
+################################################################
+
+if stage <= 8:
+    # rm -f wav/speaker.wav
+    # rm -f data/speaker.seg
+    # for f in wav/*.wav; do
+    #  fname=`echo $f | rev | cut -f2- -d'.' | cut -f1 -d'/' | rev`
+    #  python concat_seg.py data/${fname}/${fname}
+    #  if [ -f wav/speaker.wav ]; then
+    #   sox wav/speaker.wav $f wav/tmp.wav
+    #   mv wav/tmp.wav wav/speaker.wav
+    #  else
+    #   sox $f wav/speaker.wav
+    #  fi
+    # done
+
+    os.system('rm -f wav/speaker.wav')
+    os.system('rm -f data/speaker.seg')
+
+    cnt = 0
+    for f in os.listdir('wav'):
+
+        if not f.endswith('.wav'):
+            continue
+
+        cnt += 1
+        if cnt % stride != 0:
+            continue
+
+        fname = os.path.splitext(f)[0]
+
+        cmd = 'python concat_seg.py data/%s/%s' % (fname, fname)
+        print cmd
+        os.system(cmd)
+
+        if os.path.exists('wav/speaker.wav'):
+            cmd = 'sox wav/speaker.wav wav/%s.wav wav/tmp.wav' % fname
+            print cmd
+            os.system(cmd)
+            cmd = 'mv wav/tmp.wav wav/speaker.wav'
+            print cmd
+            os.system(cmd)
+        else:
+            cmd = 'sox wav/%s.wav wav/speaker.wav' % fname
+            print cmd
+            os.system(cmd)
+
+if stage <= 9:
+ 
+    # # copy the UBM for each speaker
+    # java -Xmx2024m -cp src/LIUM_SpkDiarization-8.4.1.jar fr.lium.spkDiarization.programs.MTrainInit --help --sInputMask=data/%s.seg --fInputMask=wav/%s.wav --fInputDesc="audio2sphinx,1:3:2:0:0:0,13,1:1:300:4"  --emInitMethod=copy --tInputMask=src/ubm.gmm --tOutputMask=data/%s.init.gmm speaker
+    # 
+    # # train (MAP adaptation, mean only) of each speaker, the diarization file describes the training data of each speaker.
+    # java -Xmx2024m -cp src/LIUM_SpkDiarization-8.4.1.jar fr.lium.spkDiarization.programs.MTrainMAP --help --sInputMask=data/%s.seg --fInputMask=wav/%s.wav --fInputDesc="audio2sphinx,1:3:2:0:0:0,13,1:1:300:4"  --tInputMask=data/%s.init.gmm --emCtrl=1,5,0.01 --varCtrl=0.01,10.0 --tOutputMask=data/%s.gmm speaker
+
+    cmd='java -Xmx2024m -cp src/LIUM_SpkDiarization-8.4.1.jar fr.lium.spkDiarization.programs.MTrainInit --help --sInputMask=data/%s.seg --fInputMask=wav/%s.wav --fInputDesc="audio2sphinx,1:3:2:0:0:0,13,1:1:300:4"  --emInitMethod=copy --tInputMask=src/ubm.gmm --tOutputMask=data/%s.init.gmm speaker'
+    os.system(cmd)
+    cmd='java -Xmx2024m -cp src/LIUM_SpkDiarization-8.4.1.jar fr.lium.spkDiarization.programs.MTrainMAP --help --sInputMask=data/%s.seg --fInputMask=wav/%s.wav --fInputDesc="audio2sphinx,1:3:2:0:0:0,13,1:1:300:4"  --tInputMask=data/%s.init.gmm --emCtrl=1,5,0.01 --varCtrl=0.01,10.0 --tOutputMask=data/%s.gmm speaker'
+    os.system(cmd)
+ 
+#############################################################
+# Speaker recognition                                       #
+#############################################################
+
+if stage <= 10:
+
+    cmd='mkdir -p test_data'
+    print cmd
+    os.system(cmd)
+
+    # # init
+    # echo "#!/bin/bash" >> run_parallel.sh # control parallelization
+    # # speeding up by running processes parallelly
+    # c=0
+    # for f in test/*.wav; do
+    #   ((c++))
+    #   if [ $c -gt $nj ]; then
+    #     c=0
+    #     echo "wait" >> run_parallel.sh
+    #     echo "./cluster_init_test.sh ./$f &" >> run_parallel.sh
+    #   else
+    #     echo "./cluster_init_test.sh ./$f &" >> run_parallel.sh
+    #   fi
+    # done
+    # echo "wait" >> run_parallel.sh
+    # echo "exit 0" >> run_parallel.sh
+    # 
+    # # parallel initialization
+    # chmod +x run_parallel.sh
+    # ./run_parallel.sh
+    # rm run_parallel.sh
+
+    cnt = 0
+    with open ('run_parallel.sh', 'w') as scriptf:
+        for fname in os.listdir('test'):
+
+            if not fname.endswith('.wav'):
+                continue
+
+            cnt += 1
+            if (cnt % nj) == 0:
+                scriptf.write('wait\n')
+            cmd = './cluster_init_test.sh test/%s' % fname
+            print "%d / %d JOB: %s" % (cnt, total, cmd)
+            scriptf.write('echo %s\n' % fname)
+            scriptf.write('%s &\n' % cmd)
+
+        scriptf.write('wait\n')
+    os.system('bash run_parallel.sh')
+
+if stage <= 11:
+    # for f in test/*.wav; do
+    #  testShow=`echo $f | rev | cut -f2- -d'.' | cut -f1 -d'/' | rev`
+    #  java -Xmx2G -Xms2G -cp src/LIUM_SpkDiarization-8.4.1.jar  fr.lium.spkDiarization.programs.Identification --sInputMask=test_data/${testShow}/%s.i.seg --help --fInputMask=test/%s.wav  --sOutputMask=test_data/${testShow}/%s.ident.seg --fInputDesc="audio2sphinx,1:3:2:0:0:0,13,1:1:300:4" --tInputMask=data/speaker.gmm --sTop=5,src/ubm.gmm  --sSetLabel=add $testShow
+    # done
+
+    for fname in os.listdir('test'):
+
+        if not fname.endswith('.wav'):
+            continue
+
+        testshow = os.path.splitext(fname)[0]
+        cmd = 'java -Xmx2G -Xms2G -cp src/LIUM_SpkDiarization-8.4.1.jar  fr.lium.spkDiarization.programs.Identification --sInputMask=test_data/' + testshow + '/%s.i.seg --help --fInputMask=test/%s.wav  --sOutputMask=test_data/'+testshow+'/%s.ident.seg --fInputDesc="audio2sphinx,1:3:2:0:0:0,13,1:1:300:4" --tInputMask=data/speaker.gmm --sTop=5,src/ubm.gmm  --sSetLabel=add ' + testshow
+        print cmd
+        os.system(cmd)
 
