@@ -24,7 +24,11 @@ from nltools import misc
 
 stage = 0
 nj=12
-stride = 10
+
+# experiment with these until you reach a good #clusters vs performance ratio
+# stride = 10
+# stride = 100
+stride = 200
 
 total = 0;
 for fn in os.listdir('wav'):
@@ -475,13 +479,29 @@ if stage <= 11:
     #  java -Xmx2G -Xms2G -cp src/LIUM_SpkDiarization-8.4.1.jar  fr.lium.spkDiarization.programs.Identification --sInputMask=test_data/${testShow}/%s.i.seg --help --fInputMask=test/%s.wav  --sOutputMask=test_data/${testShow}/%s.ident.seg --fInputDesc="audio2sphinx,1:3:2:0:0:0,13,1:1:300:4" --tInputMask=data/speaker.gmm --sTop=5,src/ubm.gmm  --sSetLabel=add $testShow
     # done
 
-    for fname in os.listdir('test'):
+    cnt = 0
+    with open ('run_parallel.sh', 'w') as scriptf:
+        for fname in os.listdir('test'):
 
-        if not fname.endswith('.wav'):
-            continue
+            if not fname.endswith('.wav'):
+                continue
 
-        testshow = os.path.splitext(fname)[0]
-        cmd = 'java -Xmx2G -Xms2G -cp src/LIUM_SpkDiarization-8.4.1.jar  fr.lium.spkDiarization.programs.Identification --sInputMask=test_data/' + testshow + '/%s.i.seg --help --fInputMask=test/%s.wav  --sOutputMask=test_data/'+testshow+'/%s.ident.seg --fInputDesc="audio2sphinx,1:3:2:0:0:0,13,1:1:300:4" --tInputMask=data/speaker.gmm --sTop=5,src/ubm.gmm  --sSetLabel=add ' + testshow
-        print cmd
-        os.system(cmd)
+
+            testshow = os.path.splitext(fname)[0]
+            outfn = 'test_data/%s/%s.ident.seg' % (testshow, testshow)
+            if os.path.exists(outfn):
+                continue
+
+            cnt += 1
+            if (cnt % nj) == 0:
+                scriptf.write('wait\n')
+
+            cmd = 'java -Xmx2G -Xms2G -cp src/LIUM_SpkDiarization-8.4.1.jar  fr.lium.spkDiarization.programs.Identification --sInputMask=test_data/' + testshow + '/%s.i.seg --help --fInputMask=test/%s.wav  --sOutputMask=test_data/'+testshow+'/%s.ident.seg --fInputDesc="audio2sphinx,1:3:2:0:0:0,13,1:1:300:4" --tInputMask=data/speaker.gmm --sTop=5,src/ubm.gmm  --sSetLabel=add ' + testshow
+            print "%d / %d JOB: %s" % (cnt, total, cmd)
+            scriptf.write('echo %s\n' % fname)
+            scriptf.write('%s &\n' % cmd)
+
+        scriptf.write('wait\n')
+
+    os.system('bash run_parallel.sh')
 
