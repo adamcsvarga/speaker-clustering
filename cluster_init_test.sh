@@ -37,7 +37,7 @@ echo $show
 #need JVM 1.6
 java=java
 
-datadir=sample/${show}
+datadir=test_data/${show}
 
 LOCALCLASSPATH=src/LIUM_SpkDiarization-8.4.1.jar
 

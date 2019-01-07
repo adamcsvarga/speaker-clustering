@@ -15,6 +15,12 @@ def assign(source_file):
         lines = sources.readlines()
    
    for line in lines:
+
+        if line.startswith(';;'):
+            continue
+
+        print "line:", line
+
         file_id = line.split(" ")[0]
         cluster_id = file_id.split("_")[-1].upper()
         dir_name = '_'.join(file_id.split("_")[:-1])

@@ -13,6 +13,8 @@
 #
 # Adam Varga, 2016
 
+# rm -rf data sample test_data
+
 mkdir -p data
 rm -f run_parallel.sh
 rm -f wav/speaker.wav
@@ -27,13 +29,24 @@ echo "#!/bin/bash" >> run_parallel.sh # control parallelization
 # speeding up by running processes parallelly
 c=0
 for f in wav/*.wav; do
-  ((c++))
-  if [ $c -gt $nj ]; then
-    c=0
-    echo "wait" >> run_parallel.sh
-    echo "./cluster_individual.sh ./$f &" >> run_parallel.sh
+
+  show=`basename $f .sph`
+  show=`basename $show .wav`
+
+  datadir=data/${show}
+
+  if [ ! -f ${datadir}/$show.c.gmm ] ; then
+    echo "Missing: $datadir"
+    ((c++))
+    if [ $c -gt $nj ]; then
+      c=0
+      echo "wait" >> run_parallel.sh
+      echo "./cluster_individual.sh ./$f &" >> run_parallel.sh
+    else
+      echo "./cluster_individual.sh ./$f &" >> run_parallel.sh
+    fi
   else
-    echo "./cluster_individual.sh ./$f &" >> run_parallel.sh
+    echo "Exists: $datadir"
   fi
 done
 echo "wait" >> run_parallel.sh
@@ -41,8 +54,11 @@ echo "exit 0" >> run_parallel.sh
 
 # parallel diarization
 chmod +x run_parallel.sh
+exit 0
 ./run_parallel.sh
 rm run_parallel.sh
+
+
 
 ########################################################
 # Get a sample from each file for each cluster         #
@@ -52,6 +68,7 @@ mkdir -p sample
 # save all clusters appearing in each file
 for f in data/*; do
   fname=`echo "$f" | rev | cut -f1 -d'/' | rev`
+  echo python get_clust.py ${f}/${fname}.c.3.seg
   python get_clust.py ${f}/${fname}.c.3.seg
 done
 
@@ -118,12 +135,12 @@ src/LIUM_SpkDiarization-8.4.1.jar fr.lium.spkDiarization.programs.MClust \
 --cMethod=ce --cThr=1.7 --tInputMask="src/ubm.gmm" \
 --emCtrl=1,5,0.01 --sTop=5,"src/ubm.gmm" cross
 
-#################################################################
 # Re-write global cluster labels to original segmentation       #
 #################################################################
 rm -f data/*/*.final.seg
 python assign_clusters.py sample/cross.seg
 
+#################################################################
 
 ################################################################
 # Train speaker model with MAP                                 #
@@ -179,9 +196,4 @@ for f in test/*.wav; do
  testShow=`echo $f | rev | cut -f2- -d'.' | cut -f1 -d'/' | rev`
  java -Xmx2G -Xms2G -cp src/LIUM_SpkDiarization-8.4.1.jar  fr.lium.spkDiarization.programs.Identification --sInputMask=test_data/${testShow}/%s.i.seg --help --fInputMask=test/%s.wav  --sOutputMask=test_data/${testShow}/%s.ident.seg --fInputDesc="audio2sphinx,1:3:2:0:0:0,13,1:1:300:4" --tInputMask=data/speaker.gmm --sTop=5,src/ubm.gmm  --sSetLabel=add $testShow
 done
-
-
-
-
-
 
